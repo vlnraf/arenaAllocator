@@ -8,9 +8,6 @@
 #define KB 1024
 #define MB KB * 1024
 #define GB MB * 1024
-//#define KB(x) ((uint64_t)(x) * 1024)
-//#define MB(x) KB(x) * 1024
-//#define GB(x) MB(x) * 1024
 #define DEFAULT_SIZE 4 * MB
 
 struct Arena{
@@ -269,8 +266,8 @@ Token generateNextToken(Lexer * lexer){
 }
 
 enum ASTNodeType{
-    ASTNODE_NUMBER,
-    ASTNODE_OPERATION
+    ASTNODE_UNARY,
+    ASTNODE_BINARY
 };
 
 struct ASTNode{
@@ -286,12 +283,21 @@ struct ASTNode{
 };
 
 Token token;
+ASTNode* parseExpression(Arena* arena, Lexer* l);
 
 ASTNode* parseNumber(Arena* arena, Lexer* l){
     ASTNode* node = arenaAllocStruct(arena, ASTNode);
-    while(token.type == TOKEN_NUMBER){
-        node->type = ASTNODE_NUMBER;
+    if(token.type == TOKEN_NUMBER){
+        node->type = ASTNODE_UNARY;
         node->number = token.number;
+        token = generateNextToken(l);
+    }else if (token.type == TOKEN_OPEN_BRACKET){
+        token = generateNextToken(l);
+        node = parseExpression(arena, l);
+        if(token.type != TOKEN_CLOSED_BRACKET){
+            printf("error\n");
+            exit(1);
+        }
         token = generateNextToken(l);
     }
     return node;
@@ -302,7 +308,7 @@ ASTNode* parseFactor(Arena* arena, Lexer* l){
 
     while(token.type == TOKEN_STAR || token.type == TOKEN_SLASH){
         ASTNode* node = arenaAllocStruct(arena, ASTNode);
-        node->type = ASTNODE_OPERATION;
+        node->type = ASTNODE_BINARY;
         node->operation.op = token.type;
         node->operation.left = left;
         token = generateNextToken(l);
@@ -319,7 +325,7 @@ ASTNode* parseExpression(Arena* arena, Lexer* l){
 
     while(token.type == TOKEN_PLUS || token.type == TOKEN_MINUS){
         ASTNode* node = arenaAllocStruct(arena, ASTNode);
-        node->type = ASTNODE_OPERATION;
+        node->type = ASTNODE_BINARY;
         node->operation.op = token.type;
         node->operation.left = left;
         token = generateNextToken(l);
@@ -341,9 +347,9 @@ ASTNode* parseLine(Arena* arena, String line){
 }
 
 double evaluate(ASTNode* root){
-    if(root->type == ASTNODE_NUMBER){
+    if(root->type == ASTNODE_UNARY){
         return root->number;
-    }else if(root->type == ASTNODE_OPERATION){
+    }else if(root->type == ASTNODE_BINARY){
         double l = evaluate(root->operation.left);
         double r = evaluate(root->operation.right);
         if(root->operation.op == TOKEN_PLUS){
@@ -387,7 +393,8 @@ int main(void){
         expression.text = arenaAllocArray(arena, char, 100);
         expression.length = 100;
         printf(">> ");
-        scanf_s("%99s",expression.text);
+        //scanf("%99s",expression.text);
+        fgets(expression.text, expression.length, stdin);
         ASTNode* root = parseLine(arena, expression);
         printf("%f\n", evaluate(root));
         clearArena(arena);
